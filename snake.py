@@ -17,312 +17,415 @@
 import curses
 import time
 import random
-import traceback
+import re
 
 
 __author__ = "Victor Kindhart (digitloft@gmail.com)"
 __version__ = "0.2"
 
-def load_settings():
-    f = open("settings.txt")
-    data = f.read()
-    f.close()
-    for line in data.splitlines():
-        exec "%s = %s" % (line.split("=")[0], line.split("=")[1])
-    assert isinstance(startlength, int)
-    assert isinstance(acceleration, bool)
-    assert isinstance(difficulty, str)
-    assert isinstance(growlength, int)
-    return startlength, acceleration, difficulty, growlength
+SETTINGS_DEFAULT = """
+startlength  = 5
+growlength   = 1
+difficulty   = 2
+acceleration = 1
+"""
 
-global acceleration, growlength, difficulty, startlength, speeds, speedsl
-speeds = {
+class Menu(object):
+    """
+    This class stores all the menu drawing functions and most of the
+    needed variables.
+    """
+    loaded = False
+
+    regex_settings_parser = re.compile("([\S]+)[\s]*\=[\s]*(.+)").findall
+
+    RETURN = ord("\n")
+    SPACE  = ord(" ")
+    KEY_M  = ord("m")
+
+    speeds = {
     "Noob"       : 0.3,
     "Newbie"     : 0.2,
     "Easy"       : 0.1,
     "Medium"     : 0.06,
     "Hard"       : 0.04,
     "Ultra-Hard" : 0.02
-}
-speedsl = ("Noob", "Newbie", "Easy", "Medium", "Hard", "Ultra-Hard")
-try:
-    startlength, acceleration, difficulty, growlength = load_settings()
-except:
-    f = open("settings.txt", "w")
-    f.write("startlength=5\nacceleration=True\ngrowlength=1\ndifficulty=\"Easy\"")
-    startlength = 5
-    acceleration = True
-    growlength = 1
-    difficulty = "Easy"
-
-allowed_maxy = 12
-allowed_maxx = 40
-
-screen = curses.initscr()
-maxy, maxx = screen.getmaxyx()
-if (maxy < allowed_maxy) or (maxx < allowed_maxx):
-    print "Screen is too small! It should be minimum %s by %s!" % (allowed_maxy, allowed_maxx)
-    curses.endwin()
-    raise SystemExit(1)
-curses.start_color()
-curses.init_pair(1, curses.COLOR_WHITE, curses.COLOR_BLACK)  #Default
-curses.init_pair(2, curses.COLOR_YELLOW, curses.COLOR_BLACK) #Food
-curses.init_pair(3, curses.COLOR_RED, curses.COLOR_BLACK)    #Head
-curses.init_pair(4, curses.COLOR_GREEN, curses.COLOR_BLACK)  #Body
-screen.keypad(1)
-curses.noecho()
-
-def draw_title(title="Snake", screen=screen):
-    screen.addstr(0, maxx/2-len(title)/2, title)
-
-def draw(text, y, x, color_pair=None):
-    if color_pair is None:
-        screen.addstr(y, x, text)
-    else:
-        screen.addstr(y, x, text, curses.color_pair(color_pair))
-
-def main():
-    screen.nodelay(1)
-    char = "X"
-    food = "@"
-    foodmade = False
-    blank = " "
-    heads = {
-    0: ">",
-    1: "<",
-    2: "^",
-    3: "v",
     }
-    head = [1, 1]
-    body = [head[:]] * startlength
-    startbody = len(body)
-    screen.border()
-    direction = 0 #0:right 1:left 2:up 3:down
-    gameover = 0
-    speed = 1
-    deadcell = body[-1][:]
-    paused = 0
-    while not gameover:
-        if paused:
-            if screen.getch() == ord("p"):
-                screen.border()
-                paused = 0
-                continue
-            time.sleep(0.1)
-            continue
-        while not foodmade:
-            y, x = random.randrange(1, maxy - 1), random.randrange(1, maxy - 1)
-            if screen.inch(y, x) == ord(' '):
-                foodmade = True
-                screen.addch(y, x, ord(food), curses.A_BOLD|curses.color_pair(2))
-        if deadcell not in body:
-            screen.addch(deadcell[0], deadcell[1], blank)
+    difficulties = ("Noob", "Newbie", "Easy", "Medium", "Hard", "Ultra-Hard")
 
-        action = screen.getch()
-        if action == curses.KEY_UP and direction != 3:
-            direction = 2
-        elif action == curses.KEY_DOWN and direction != 2:
-            direction = 3
-        elif action == curses.KEY_RIGHT and direction != 1:
-            direction = 0
-        elif action == curses.KEY_LEFT and direction != 0:
-            direction = 1
+    def settings_parser(self, settings):
+        out = dict(self.regex_settings_parser(settings))
+        for key, value in out.items():
+            if value.isdigit():
+                out[key] = int(value)
+            elif value in ("True", "False"):
+                out[key] = eval(value)
+        return out
 
-        elif action == ord('q'):
-            gameover = True
-            continue
-
-        elif action == ord("p"):
-            screen.addstr(maxy - 1, 1, "Paused. Press P to continue.")
-            paused = 1
-            #continue
-
-        headchar = heads[direction]
-        screen.addch(head[0], head[1], headchar, curses.A_BOLD|curses.color_pair(3))
-        screen.addch(body[1][0], body[1][1], char, curses.color_pair(4))
-
-        if direction == 0:
-            head[1] += speed
-        elif direction == 1:
-            head[1] -= speed
-        elif direction == 2:
-            head[0] -= speed
-        elif direction == 3:
-            head[0] += speed
-
-        deadcell = body[-1][:]
-        for z in range(len(body) - 1, 0, -1):
-            body[z] = body[z - 1]
-
-        body[0] = head[:]
-
-        nchar = screen.inch(head[0], head[1])
-        if nchar == 2097728:
-            foodmade = False
-            for i in range(growlength):
-                body.append(body[-1])
-        elif nchar == ord(" "):
-            pass
-        else:
-            gameover = True
-        screen.addstr(0, 1, "Score:%s" % ((len(body) - startbody)/growlength))
-        screen.move(maxy - 1, maxx - 1)
-        screen.refresh()
-        if not acceleration:
-            t = speeds[difficulty]
-        else:
-            t = 15.0 * speeds[difficulty]/len(body)
-        time.sleep(t)
-
-    if gameover:
-        screen.clear()
-        screen.nodelay(0)
-        options = (
-        "Game Over!",
-        "You got " + str((len(body) - startbody)/growlength) + " points",
-        "Press Space to play again",
-        "Press M to go to main menu",
-        "Press Enter to quit")
-        i = -(len(options)/2)
-        for msg in options:
-            screen.addstr(maxy/2 + i, (maxx - len(msg))/2, msg)
-            i += 1
-        screen.refresh()
-        q = None
-        while q not in (ord(" "), ord("\n"), ord("m")):
-            q = screen.getch()
-        screen.clear()
-        if q == ord(" "):
-            return "play"
-        elif q == ord("m"):
-            return "continue"
-        elif q == ord("\n"):
-            return
-
-def help():
-    str = "Welcome to Snake! You can control your snake using arrow keys."
-    str2 = "Try to get as many points as you can to win! Good luck."
-    draw_title()
-    screen.addstr(maxy/2-1, maxx/2-len(str)/2, str)
-    screen.addstr(maxy/2, maxx/2-len(str2)/2, str2)
-    screen.addstr(maxy/2+5, maxx/4-2, "Back", curses.A_REVERSE)
-    while True:
-        action = screen.getch()
-        if action == ord("\n"):
-            screen.clear()
-            return
-
-def settings():
-    options = (
-    "Starting snake length: ",
-    "Grow length: ",
-    "Difficulty: ",
-    "Acceleration: ",
-    "Back"
-    )
-    global difficulty, acceleration, growlength, startlength, speedsl, speeds
-    option = 0
-    while True:
-        screen.clear()
-        graphics = [0] * len(options)
-        graphics[option] = curses.A_REVERSE
-        draw_title()
-        screen.addstr(maxy/2-2, maxx/2-len(options[0])/2,   options[0] + str(startlength),     graphics[0])
-        screen.addstr(maxy/2-1, maxx/2-len(options[1])/2,   options[1] + str(growlength),      graphics[1])
-        screen.addstr(maxy/2,   maxx/2-len(options[2])/2-1, options[2] + str(difficulty),      graphics[2])
-        screen.addstr(maxy/2+1, maxx/2-len(options[3])/2-1, options[3] + str(acceleration),    graphics[3])
-        screen.addstr(maxy/2+2, maxx/2-len(options[4])/2+1, options[4],                        graphics[4])
-        action = screen.getch()
-        if action == curses.KEY_DOWN:
-            option = (option + 1) % len(graphics)
-        elif action == curses.KEY_UP:
-            option = (option - 1) % len(graphics)
-        elif action == ord("\n"):
-            if option == 4:
+    def load_settings(self):
+        try:
+            f = open("settings.txt", "r")
+            data = f.read()
+            f.close()
+        except:
+            try:
                 f = open("settings.txt", "w")
-                f.write("startlength=%s\nacceleration=%s\ngrowlength=%s\ndifficulty=\"%s\"" % (startlength, acceleration, growlength, difficulty))
-                f.close()
-                screen.clear()
+            except:
+                self.default_settings() 
                 return
-            elif option == 3:
-                if acceleration == True:
-                    acceleration = False
-                else:
-                    acceleration = True
-        elif action in (curses.KEY_LEFT, curses.KEY_RIGHT):
-            if option == 4:
-                continue
-            if action == curses.KEY_LEFT: #Left arrow Key
-                if option == 0 and startlength > 2:
-                    startlength -= 1
-                elif option == 1 and growlength > 1:
-                    growlength -= 1
-                elif option == 2:
-                    index = speedsl.index(difficulty) - 1
-                    if index < 0:
-                        index = 5
-                    difficulty = speedsl[index]
-                elif option == 3:
-                    if acceleration == True:
-                        acceleration = False
-                    else:
-                        acceleration = True
-                elif option == 4 and clients > 2:
-                    clients -= 1
-            elif action == curses.KEY_RIGHT: #Right arrow Key
-                if option == 0 and startlength < 10:
-                    startlength += 1
-                elif option == 1 and growlength < 7:
-                    growlength += 1
-                elif option == 2:
-                    index = speedsl.index(difficulty) + 1
-                    if index > 5:
-                        index = 0
-                    difficulty = speedsl[index]
-                elif option == 3:
-                    if acceleration == True:
-                        acceleration = False
-                    else:
-                        acceleration = True
+            self.default_settings()
 
+            f.write(SETTINGS_DEFAULT)
+            f.close()
+            return
+        required = [
+            "startlength",
+            "growlength",
+            "difficulty",
+            "acceleration"
+        ]
+        required.sort()
+        found = []
+        settings = self.settings_parser(data)
+        for key, value in settings.items():
+            if key in required:
+                found.append(key)
 
-def menu():
-    screen.nodelay(0)
-    option = 0
-    while True:
-        graphics = [0] * 4
-        graphics[option] = curses.A_REVERSE
-        draw_title()
+        found.sort()
+        if not (required == found):
+            self.default_settings()
+            return
+        self.settings = {
+            "startlength"  : settings["startlength"],
+            "growlength"   : settings["growlength"],
+            "difficulty"   : settings["difficulty"],
+            "acceleration" : settings["acceleration"]
+        }
 
-        screen.addstr(maxy/2-2, maxx/2-2, "Play", graphics[0])
-        screen.addstr(maxy/2-1, maxx/2-2, "Help", graphics[1])
-        screen.addstr(maxy/2, maxx/2-4, "Settings", graphics[2])
-        screen.addstr(maxy/2+1, maxx/2-2, "Exit", graphics[3])
-        screen.refresh()
-        action = screen.getch()
+    def default_settings(self):
+        self.settings = {
+            "startlength"  : 5,
+            "growlength"   : 1,
+            "difficulty"   : 2,
+            "acceleration" : 1
+        }
+
+    def generate_settings_string(self):
+        string = ""
+        for item, value in self.settings.items():
+            string += item + "=" + str(value) + "\n"
+        return string
+
+    def load_screen(self):
+        self.screen = curses.initscr()
+        self.maxy, self.maxx = self.screen.getmaxyx()
+        self.allowed_maxy = 12
+        self.allowed_maxx = 40
+        if (self.maxy < self.allowed_maxy) or (self.maxx < self.allowed_maxx):
+            print "Screen is too small! It should be minimum %s by %s!" % \
+            (self.allowed_maxy, self.allowed_maxx)
+            self.unload_screen()
+            raise SystemExit(1)
+        curses.start_color()
+        curses.init_pair(1, curses.COLOR_WHITE, curses.COLOR_BLACK)  #Default
+        curses.init_pair(2, curses.COLOR_YELLOW, curses.COLOR_BLACK) #Food
+        curses.init_pair(3, curses.COLOR_RED, curses.COLOR_BLACK)    #Head
+        curses.init_pair(4, curses.COLOR_GREEN, curses.COLOR_BLACK)  #Body
+        self.screen.keypad(1)
+        curses.noecho()
+        loaded = True
+
+    def unload_screen(self):
+        curses.endwin()
+
+    def refresh(self):
+        self.screen.refresh()
+
+    def getch(self):
+        return self.screen.getch()
+
+    def clear(self):
+        self.screen.clear()
+
+    def draw_title(self, title="Snake"):
+        self.screen.addstr(0, self.maxx/2-len(title)/2, title)
+
+    def draw_menu(self, menu_elements, graphics, refresh=True):
+        z = -len ( min( (menu_elements, graphics) ) ) / 2
+        for element, attr in zip(menu_elements, graphics):
+            self.screen.addstr( self.maxy/2 + z,
+                                self.maxx/2 - len(element)/2,
+                                element,
+                                attr )
+            z += 1
+        if refresh:
+            self.refresh()
+
+    def menu_mode(self):
+        self.screen.nodelay(0)
+
+    def game_mode(self):
+        self.screen.nodelay(1)
+
+    def handle_key_menu(self, stdoption, action, graphics):
         if action == curses.KEY_UP:
-            option = (option - 1) % len(graphics)
+            return (stdoption - 1) % len(graphics)
         elif action == curses.KEY_DOWN:
-            option = (option + 1) % len(graphics)
-        elif action == ord("\n"):
-            screen.clear()
-            if option == 0: #Play
-                while True:
-                    opt = main()
-                    if opt == "play":
-                        screen.clear()
-                        opt = main()
-                    elif opt == "continue":
-                        break
-                    else:
-                        return
-                screen.clear()
-            elif option == 1: #Help menu
-                help()
-            elif option == 2: #Settings
-                settings()
-            elif option == 3: #Exit
-                break
+            return (stdoption + 1) % len(graphics)
+        else:
+            return stdoption
 
-menu()
-curses.endwin()
+    def help_menu(self):
+        self.draw_title()
+        elements = (
+            "Welcome to Snake! Use arrow keys to control your snake.",
+            "Try to get as many points as you can. And try not to",
+            "hit walls or your snake's body.",
+            "",
+            "",
+            "Press any key to go back."
+        )
+        graphics = (0, 0, 0, 0, 0, 0)
+        self.draw_menu(elements, graphics)
+        self.getch()
+        self.clear()
+
+    def gameover_menu(self, score):
+        self.clear()
+        self.draw_title("Game Over!")
+        elements = (
+            "You got " + str(score) + " points",
+            "Press Return to play again",
+            "Press M to go to main menu",
+            "Press Q to quit"
+        )
+        self.draw_menu(elements, (0, 0, 0, 0))
+        q = None
+        while q not in (self.RETURN, self.KEY_M, ord("q")):
+            q = self.getch()
+            if q == ord("q"):
+                option = "quit"
+            elif q == self.RETURN:
+                option = "play again"
+            elif q == self.KEY_M:
+                option = "menu"
+        self.clear()
+        return option
+
+    def settings_menu(self):
+        elements = (
+            lambda: "Starting snake length: " + str(self.settings["startlength"]),
+            lambda: "Grow length: " + str(self.settings["growlength"]),
+            lambda: "Difficulty: " + self.difficulties[self.settings["difficulty"]],
+            lambda: "Acceleration: " + str(self.settings["acceleration"]),
+            lambda: "Back"
+        )
+        option = 0
+        while True:
+            self.clear()
+            graphics = [0, 0, 0, 0, 0]
+            graphics[option] = curses.A_REVERSE
+            self.draw_title()
+            self.draw_menu(tuple(i() for i in elements), graphics)
+            action = self.getch()
+            option = self.handle_key_menu(option, action, graphics)
+            if option == 4:
+                if action == self.RETURN:
+                    self.save_settings()
+                    break
+            if action in (curses.KEY_LEFT, curses.KEY_RIGHT):
+                if action == curses.KEY_LEFT:
+                    if option == 0 and self.settings["startlength"] > 2:
+                        self.settings["startlength"] -= 1
+                    elif option == 1 and self.settings["growlength"] > 1:
+                        self.settings["growlength"] -= 1
+                    elif option == 2:
+                        new_difficulty = (self.settings["difficulty"] - 1) % 6
+                        value = self.difficulties[new_difficulty]
+                        self.settings["difficulty"] = self.difficulties.index(value)
+                    elif option == 3:
+                        if self.settings["acceleration"]:
+                            self.settings["acceleration"] = False
+                        else:
+                            self.settings["acceleration"] = True
+                elif action == curses.KEY_RIGHT:
+                    if option == 0 and self.settings["startlength"] < 10:
+                        self.settings["startlength"] += 1
+                    elif option == 1 and self.settings["growlength"] < 7:
+                        self.settings["growlength"] += 1
+                    elif option == 2:
+                        new_difficulty = (self.settings["difficulty"] + 1) % 6
+                        value = self.difficulties[new_difficulty]
+                        self.settings["difficulty"] = self.difficulties.index(value)
+                    elif option == 3:
+                        if self.settings["acceleration"]:
+                            self.settings["acceleration"] = False
+                        else:
+                            self.settings["acceleration"] = True
+        self.clear()
+
+    def save_settings(self):
+        try:
+            f = open("settings.txt", "w")
+            f.write(self.generate_settings_string())
+            f.close()
+        except:
+            pass
+
+    def main_menu(self, scr=None):
+        del scr
+        if not self.loaded:
+            self.load_screen()
+        self.load_settings()
+        self.menu_mode()
+        option = 0
+        while True:
+            self.draw_title()
+            elements = (
+                "Play",
+                "Help",
+                "Settings",
+                "Exit"
+            )
+            graphics = [0, 0, 0, 0]
+            graphics[option] = curses.A_REVERSE
+            self.draw_menu(elements, graphics)
+            action = self.getch()
+            option = self.handle_key_menu(option, action, graphics)
+            if action == self.RETURN:
+                self.clear()
+                if option == 0:  #Play
+                    while True:
+                        self.game_mode()
+                        snake = SnakeGameWindow(self)
+                        score = snake.run()
+                        del snake
+                        self.menu_mode()
+                        opt = self.gameover_menu(score)
+                        if opt == "quit":
+                            return self.unload_screen()
+                        elif opt == "play again":
+                            continue
+                        elif opt == "menu":
+                            break
+                elif option == 1:  #Help menu
+                    self.help_menu()
+                elif option == 2:  #Settings menu
+                    self.settings_menu()
+                elif option == 3:  #Exit
+                    break
+        self.unload_screen()
+
+class SnakeGameWindow(object):
+    """
+    This class actually has the code for the snake game.
+    """
+    def __init__(self, screen):
+        self.screen = screen
+    def run(self):
+        self.screen.screen.border()
+
+        screen = self.screen.screen
+
+        startlength = self.screen.settings["startlength"]
+        growlength = self.screen.settings["growlength"]
+        difficulty = self.screen.difficulties[self.screen.settings["difficulty"]]
+        acceleration = self.screen.settings["acceleration"]
+
+        food = "@"
+        char = "X"
+        heads = (">", "<", "^", "v")
+        head = [1, 1]
+        foodmade = False
+        blank = " "
+        direction = 0  #0:right 1:left 2:up 3:down
+        gameover = 0
+        speed = 1
+        paused = 0
+        maxx, maxy = self.screen.maxx, self.screen.maxy
+
+        body = [head[:]] * startlength
+        deadcell = body[-1][:]
+        startbody = len(body)
+        while not gameover:
+            if paused:
+                if screen.getch() == ord("p"):
+                    screen.border()
+                    paused = 0
+                    continue
+                time.sleep(0.1)
+                continue
+            while not foodmade:
+                y, x = random.randrange(1, maxy - 1), random.randrange(1, maxy - 1)
+                if screen.inch(y, x) == ord(' '):
+                    foodmade = True
+                    screen.addch(y, x, ord(food), curses.A_BOLD|curses.color_pair(2))
+            if deadcell not in body:
+                screen.addch(deadcell[0], deadcell[1], blank)
+
+            action = screen.getch()
+            if action == curses.KEY_UP and direction != 3:
+                direction = 2
+            elif action == curses.KEY_DOWN and direction != 2:
+                direction = 3
+            elif action == curses.KEY_RIGHT and direction != 1:
+                direction = 0
+            elif action == curses.KEY_LEFT and direction != 0:
+                direction = 1
+
+            elif action == ord('q'):
+                gameover = True
+                continue
+
+            elif action == ord("p"):
+                screen.addstr(maxy - 1, 1, "Paused. Press P to continue.")
+                paused = 1
+                #continue
+
+            headchar = heads[direction]
+            screen.addch(head[0], head[1], headchar, curses.A_BOLD|curses.color_pair(3))
+            screen.addch(body[1][0], body[1][1], char, curses.color_pair(4))
+
+            if direction == 0:
+                head[1] += speed
+            elif direction == 1:
+                head[1] -= speed
+            elif direction == 2:
+                head[0] -= speed
+            elif direction == 3:
+                head[0] += speed
+
+            deadcell = body[-1][:]
+            for z in range(len(body) - 1, 0, -1):
+                body[z] = body[z - 1]
+
+            body[0] = head[:]
+
+            nchar = screen.inch(head[0], head[1])
+            if nchar == 2097728:
+                foodmade = False
+                for i in range(growlength):
+                    body.append(body[-1])
+            elif nchar == ord(" "):
+                pass
+            else:
+                gameover = True
+            screen.addstr(0, 1, "Score:%s" % ((len(body) - startbody)/growlength))
+            screen.move(maxy - 1, maxx - 1)
+            screen.refresh()
+
+            sleep_speed = self.screen.speeds[difficulty]
+            if direction in (2, 3):
+                sleep_speed += sleep_speed/2
+            if not acceleration:
+                t = sleep_speed
+            else:
+                t = 15.0 * sleep_speed/len(body)
+            time.sleep(t)
+        self.screen.clear()
+        self.screen.getch()
+        return ((len(body) - startbody)/growlength)
+
+menu = Menu()
+import curses.wrapper
+curses.wrapper(menu.main_menu)
