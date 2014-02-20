@@ -4,7 +4,7 @@ Python curses Snake game
 Snake is a very simple game written using Python curses library.
 If you found any bugs, or got any ideas how to improve it, contact me at digitloft@gmail.com
 
-Version 0.2.2
+Version 0.2.2<br>
 [+] New
     Fully rewrtitten the code! Now it uses classes and almost no global variables.
     Now snake moves slower up and down. It was impossible to play :[
