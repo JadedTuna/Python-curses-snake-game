@@ -6,7 +6,7 @@ If you found any bugs, or got any ideas how to improve it, contact me at digitlo
 
 Version 0.2.2
 [+] New
-    Fully rewrtitten the code! Now it uses classes and almost no global variables.
+    I have had fully rewritten the code! Now it uses classes and almost no global variables.
     Now snake moves slower up and down. It was impossible to play :[
 
 Version 0.2
