@@ -14,8 +14,8 @@ Version 0.2
     Colors! Now snake and food are colored.
     New snake. Its head will look different, depending on the direction.
     Settings menu. Now you can customise settings (like grow length, difficulty), without having to modify the code.
-        Also, settings are saved to file settings.txt.
-    Score. Now, when you are playing, you can see your score in the top right corner.
+        Also, settings get saved to file settings.txt.
+    Score. Now, when you are playing, you can see your score in the top left corner.
     Pause menu. Press P to pause the game.
     
     Cleaned up the code a little bit.
