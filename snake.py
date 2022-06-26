@@ -1,5 +1,5 @@
 ## Snake - a very simple Python curses snake game.
-## Copyright (C) 2014 Victor Kindhart (digitloft@gmail.com)
+## Copyright (C) 2014 Victor Kindhart
 ## 
 ## This program is free software: you can redistribute it and/or modify
 ## it under the terms of the GNU General Public License as published by
@@ -20,7 +20,7 @@ import random
 import re
 
 
-__author__ = "Victor Kindhart (digitloft@gmail.com)"
+__author__ = "Victor Kindhart"
 __version__ = "0.2"
 
 SETTINGS_DEFAULT = """
